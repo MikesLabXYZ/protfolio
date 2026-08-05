@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/nav') %>
+<main>
+  <div class="container">
+    <p class="eyebrow">About</p>
+    <h1>How I got here</h1>
+
+    <div class="about-layout">
+      <aside class="reveal delay-0">
+        <div class="facts-card">
+          <div class="about-avatar">MD</div>
+          <div class="fact">
+            <span class="k">Based in</span>
+            <span class="v">Tel Aviv District, Israel</span>
+          </div>
+          <div class="fact">
+            <span class="k">Focus</span>
+            <span class="v">Cloud infrastructure &amp; security</span>
+          </div>
+          <div class="fact">
+            <span class="k">Currently</span>
+            <span class="v status-live"><span class="dot"></span>Certified Network Defender &mdash; final stretch</span>
+          </div>
+          <div class="fact">
+            <span class="k">Building</span>
+            <span class="v">The AWS environment this site runs on</span>
+          </div>
+        </div>
+      </aside>
+
+      <div>
+        <p class="lead reveal delay-1">
+          I'm a hands-on operations and infrastructure professional with 5+
+          years leading technical systems, cross-functional teams, and
+          critical workflows across startup and nonprofit environments.
+        </p>
+
+        <p class="reveal delay-2">
+          At XP.NETWORK, I helped launch and scale a multi-chain blockchain
+          product, managing infrastructure across AWS, Cloudflare, MongoDB,
+          and GitHub, coordinating investor communications, and supporting
+          cross-team delivery from product to community. I also built the
+          entire social and support ecosystem from scratch, including global
+          moderator teams and platform integrations.
+        </p>
+        <p class="reveal delay-3">
+          Outside of Web3, I've led major infrastructure projects for
+          fundraising campaigns and nonprofits - overseeing real-time
+          donation systems, registration platforms, payment integrations,
+          DNS management, and stakeholder delivery on tight timelines.
+        </p>
+
+        <blockquote class="pull-quote reveal delay-4">
+          I thrive where execution, clarity, and system thinking matter -
+          bridging business needs with technical operations to move teams
+          forward.
+        </blockquote>
+
+        <p class="reveal delay-5">
+          That instinct is exactly what pulled me into cloud and security
+          engineering directly. I'm in the final stretch of Bar-Ilan
+          University's Certified Network Defender program - Active
+          Directory/Azure, Check Point, Palo Alto, Cisco networking, Linux,
+          and AWS architecture - and the capstone isn't a toy project. I
+          designed and built a real multi-account AWS Organization: Entra
+          ID SSO, a hub-and-spoke Transit Gateway network, encrypted
+          multi-region storage, and a self-configured Palo Alto firewall
+          bridged in over a genuine Site-to-Site VPN.
+        </p>
+        <p class="reveal delay-6">
+          This site is deployed on that infrastructure. Not a demo of it -
+          the actual thing.
+        </p>
+      </div>
+    </div>
+  </div>
+</main>
+<%- include('partials/footer') %>
+<script src="/static/js/reveal.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/nav') %>
+<main>
+  <div class="container">
+    <p class="eyebrow"><a href="/projects">&larr; Projects</a></p>
+    <h1><%= project.title %></h1>
+    <% (project.tags || []).forEach(function(tag) { %>
+      <span class="tag"><%= tag %></span>
+    <% }); %>
+    <div class="page-body">
+      <p class="lead spaced"><%= project.summary %></p>
+      <p><%= project.description %></p>
+    </div>
+  </div>
+</main>
+<%- include('partials/footer') %>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/nav') %>
+<main>
+  <div class="container hero">
+    <div class="hero-glow" aria-hidden="true"><span class="blob-a"></span><span class="blob-b"></span></div>
+    <span class="plus-mark" aria-hidden="true">+</span>
+    <span class="plus-mark" aria-hidden="true">+</span>
+    <span class="plus-mark" aria-hidden="true">+</span>
+
+    <div class="hero-copy">
+      <div class="pill-row">
+        <span class="pill">Cloud Infrastructure</span>
+        <span class="pill">Security Engineering</span>
+        <span class="pill">DevOps</span>
+        <span class="pill">Infra Leadership</span>
+      </div>
+      <h1>Michael Dagan</h1>
+      <p class="hero-tagline" id="hero-typewriter">
+        Bridging business needs with <span class="gradient-text">technical operations that scale</span>.
+      </p>
+      <p class="lead">
+        Right now: building a multi-account AWS environment end-to-end -
+        Organizations, federated SSO, a hub-and-spoke network, encrypted
+        multi-region storage, and a self-configured Palo Alto firewall
+        bridged in over a real Site-to-Site VPN. This site runs on it.
+      </p>
+      <div class="hero-actions">
+        <a class="btn" href="/projects">View projects</a>
+        <button class="btn secondary" disabled aria-disabled="true" title="Coming soon">Resume &middot; coming soon</button>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="visual-inner">
+        <canvas id="network-hero" aria-hidden="true"></canvas>
+      </div>
+      <div class="node-badge node-badge-1"><img src="/static/icons/color/amazonwebservices.svg" alt="AWS" data-logo="amazonwebservices"></div>
+      <div class="node-badge node-badge-2"><img src="/static/icons/color/azure.svg" alt="Microsoft Azure"></div>
+      <div class="node-badge node-badge-3"><img src="/static/icons/color/paloaltonetworks-mark.svg" alt="Palo Alto Networks"></div>
+      <div class="node-badge node-badge-4"><img src="/static/icons/color/docker.svg" alt="Docker"></div>
+      <div class="node-badge node-badge-5"><img src="/static/icons/color/postgresql.svg" alt="PostgreSQL"></div>
+      <div class="node-badge node-badge-6"><img src="/static/icons/color/linux.svg" alt="Linux"></div>
+      <div class="node-badge node-badge-7"><img src="/static/icons/color/github.svg" alt="GitHub" data-logo="github"></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="stat-strip">
+      <div class="stat reveal delay-0">
+        <span class="icon-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="18" height="5" rx="1.3"/><rect x="3" y="9.5" width="18" height="5" rx="1.3"/><rect x="3" y="15.5" width="18" height="5" rx="1.3"/><circle cx="6.3" cy="6" r="0.7" fill="currentColor" stroke="none"/><circle cx="6.3" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="6.3" cy="18" r="0.7" fill="currentColor" stroke="none"/><path d="M15 6h3M15 12h3M15 18h3"/></svg>
+        </span>
+        <span class="value">5+ yrs</span>
+        <span class="label">Infrastructure &amp; ops</span>
+        <span class="desc">From startup chaos to structured cloud architecture.</span>
+      </div>
+      <div class="stat reveal delay-1">
+        <span class="icon-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.2" cy="10.2" r="7.2"/><path d="M10.2 6.2v8M12.7 8c0-1-1.1-1.7-2.5-1.7s-2.5.6-2.5 1.5c0 2.1 5 .9 5 3 0 1-1.1 1.7-2.5 1.7s-2.6-.6-2.7-1.6"/><path d="M14.8 14.8L21 21M21 21h-4.5M21 21v-4.5"/></svg>
+        </span>
+        <span class="value">$8K/mo</span>
+        <span class="label">Cost savings delivered</span>
+        <span class="desc">Audited and cut recurring cloud &amp; SaaS spend.</span>
+      </div>
+      <div class="stat reveal delay-2">
+        <span class="icon-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5v5M15 2.5v5"/><path d="M6 7.5h12v3.5a6 6 0 0 1-12 0V7.5z"/><path d="M12 17v4.5"/></svg>
+        </span>
+        <span class="value">19</span>
+        <span class="label">Integrations delivered</span>
+        <span class="desc">Blockchain grant integrations, shipped end-to-end.</span>
+      </div>
+      <div class="stat reveal delay-3">
+        <span class="icon-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/><path d="M4.7 7.3c3.9-1.9 10.7-1.9 14.6 0M4.7 16.7c3.9 1.9 10.7 1.9 14.6 0"/></svg>
+        </span>
+        <span class="value">24/7</span>
+        <span class="label">Global community led</span>
+        <span class="desc">Moderator teams spanning 6+ countries.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <p class="eyebrow">Tools &amp; platforms</p>
+  </div>
+  <div class="marquee-wrap">
+    <%
+      var stack = [
+        'amazonwebservices', 'azure', 'cloudflare', 'heroku', 'google',
+        'paloaltonetworks', 'checkpoint', 'cisco',
+        'linux', 'docker', 'mongodb', 'postgresql', 'github', 'wordpress',
+        'jira', 'trello', 'dropbox', 'docusign',
+      ];
+      var COPIES = 6;
+    %>
+    <div class="marquee-track" data-copies="<%= COPIES %>">
+      <% for (var r = 0; r < COPIES; r++) { %>
+        <% stack.forEach(function(file) { %>
+          <span class="stack-logo"><img src="/static/icons/color/<%= file %>.svg" alt="" data-logo="<%= file %>" draggable="false"></span>
+        <% }); %>
+      <% } %>
+    </div>
+  </div>
+</main>
+<%- include('partials/footer') %>
+<script src="/static/js/network-hero.js"></script>
+<script src="/static/js/typewriter.js"></script>
+<script src="/static/js/reveal.js"></script>
+<script src="/static/js/marquee.js"></script>
+<script src="/static/js/hero-drag.js"></script>
+</body>
+</html>

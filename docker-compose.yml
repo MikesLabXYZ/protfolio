@@ -1,0 +1,35 @@
+name: portfolio
+
+services:
+  app:
+    build: .
+    ports:
+      - "8081:3000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      UPLOAD_DIR: /app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-portfolio}
+      POSTGRES_USER: ${DB_USER:-portfolio}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-portfolio}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  uploads:
