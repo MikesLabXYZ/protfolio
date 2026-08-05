@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/nav') %>
+<main>
+  <div class="container">
+    <p class="eyebrow">Projects</p>
+    <h1>Selected work</h1>
+
+    <div class="page-body">
+      <% projects.forEach(function(p, i) { %>
+        <a class="card reveal delay-<%= Math.min(i, 9) %>" href="/projects/<%= p.slug %>">
+          <div class="card-head">
+            <h3><%= p.title %></h3>
+            <span class="status"><span class="dot"></span>live</span>
+          </div>
+          <p><%= p.summary %></p>
+          <% (p.tags || []).forEach(function(tag) { %>
+            <span class="tag"><%= tag %></span>
+          <% }); %>
+        </a>
+      <% }); %>
+
+      <% if (projects.length === 0) { %>
+        <p>No published projects yet.</p>
+      <% } %>
+    </div>
+  </div>
+</main>
+<%- include('partials/footer') %>
+<script src="/static/js/reveal.js"></script>
+</body>
+</html>

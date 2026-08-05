@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<%- include('partials/head') %>
+</head>
+<body>
+<%- include('partials/nav') %>
+<main>
+  <div class="container">
+    <p class="eyebrow">Experience</p>
+    <h1>Timeline</h1>
+
+    <div class="page-body log">
+      <div class="log-entry reveal delay-0">
+        <div class="period">Oct 2025 &ndash; present</div>
+        <h3>Certified Network Defender Program &middot; Bar-Ilan University</h3>
+        <p>
+          Hands-on, not just coursework. In the AWS Solutions Architect module
+          I designed and built a multi-account AWS Organization from scratch:
+          Entra ID SSO federated through IAM Identity Center, least-privilege
+          permission sets per business unit, a hub-and-spoke Transit Gateway
+          network across seven VPCs, KMS-encrypted S3 replicated live across
+          three regions, and a self-configured Palo Alto Networks firewall
+          doing SSL forward-proxy decryption and a real Site-to-Site VPN back
+          into the AWS network. This site runs on that infrastructure.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+
+      <div class="log-entry reveal delay-1">
+        <div class="period">Jan 2025 &ndash; present</div>
+        <h3>Blumberger Law Firm &middot; Execution &amp; External Operations</h3>
+        <p>
+          Full-spectrum operational and technical setup for a new legal firm
+          in a compliance-sensitive, regulated environment: secure email and
+          domain infrastructure, secure file hosting for legal and financial
+          documentation, KYB procedures with exchanges, structured billing
+          workflows, and client/supplier coordination.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+
+      <div class="log-entry reveal delay-2">
+        <div class="period">Jan 2022 &ndash; Jan 2025</div>
+        <h3>XP.NETWORK &middot; Technical Operations &amp; Project Lead</h3>
+        <p>
+          Owned technical operations and cross-functional coordination for a
+          Web3 startup's multi-chain NFT bridge, integrated with 30+
+          blockchains. Infrastructure across AWS, Cloudflare, MongoDB,
+          Heroku, and GitHub; staging/production flows, SSL, and DNS;
+          weekly investor and community updates; 19 blockchain grant
+          integrations delivered; cut recurring costs by ~$8,000/month
+          through a service audit.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+
+      <div class="log-entry reveal delay-3">
+        <div class="period">Mar 2021 &ndash; Feb 2022</div>
+        <h3>XP.NETWORK &middot; Community Lead &amp; Operations</h3>
+        <p>
+          Built and led the company's early-stage community, support, and
+          platform presence from scratch across Telegram, X, Discord,
+          Medium, Reddit, and more - including a 24/7 global moderator team
+          and the escalation workflows connecting community, product, and
+          technical teams.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+
+      <div class="log-entry reveal delay-4">
+        <div class="period">Jan 2020 &ndash; Mar 2021</div>
+        <h3>Nonprofit One &middot; Web &amp; Infrastructure Project Manager</h3>
+        <p>
+          Led digital infrastructure and campaign systems for organizations
+          including Krembo Wings, IGY, and the College of Management:
+          televised fundraising platforms with real-time dashboards,
+          high-volume payment forms, secure registration and donation
+          systems, and DNS transitions during live national campaigns.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+
+      <div class="log-entry reveal delay-5">
+        <div class="period">Mar 2016 &ndash; Nov 2019</div>
+        <h3>Leonardo Hotels &middot; Security Manager</h3>
+        <p>
+          Led physical security operations in a high-traffic hospitality
+          environment - team management, emergency response, and CCTV
+          system deployment and oversight. Where the security mindset
+          started, well before the infrastructure did.
+        </p>
+        <span class="arrow">&rarr;</span>
+      </div>
+    </div>
+
+    <p class="resume-pending">Full resume &mdash; coming soon</p>
+  </div>
+</main>
+<%- include('partials/footer') %>
+<script src="/static/js/reveal.js"></script>
+</body>
+</html>
