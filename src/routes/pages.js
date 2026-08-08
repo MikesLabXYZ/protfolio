@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../db');
+const db = require('../db');
 
 const router = express.Router();
 
@@ -17,8 +17,8 @@ router.get('/experience', (req, res) => {
 
 router.get('/projects', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT slug, title, summary, tags FROM projects WHERE is_draft = FALSE ORDER BY sort_order ASC'
+    const { rows } = await db.queryRead(
+      'SELECT slug, title, summary, tags, image_filename FROM projects WHERE is_draft = FALSE ORDER BY sort_order ASC'
     );
     res.render('projects', { title: 'Projects', projects: rows });
   } catch (err) {
@@ -28,7 +28,7 @@ router.get('/projects', async (req, res, next) => {
 
 router.get('/projects/:slug', async (req, res, next) => {
   try {
-    const { rows } = await pool.query(
+    const { rows } = await db.queryRead(
       'SELECT * FROM projects WHERE slug = $1 AND is_draft = FALSE',
       [req.params.slug]
     );

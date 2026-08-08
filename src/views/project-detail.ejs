@@ -8,6 +8,9 @@
 <main>
   <div class="container">
     <p class="eyebrow"><a href="/projects">&larr; Projects</a></p>
+    <% if (project.image_filename) { %>
+      <img class="detail-image" src="/uploads/<%= project.image_filename %>" alt="<%= project.title %> screenshot">
+    <% } %>
     <h1><%= project.title %></h1>
     <% (project.tags || []).forEach(function(tag) { %>
       <span class="tag"><%= tag %></span>

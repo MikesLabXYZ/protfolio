@@ -9,7 +9,7 @@ services:
       - .env
     environment:
       DB_HOST: db
-      UPLOAD_DIR: /app/uploads
+      UPLOAD_PATH: /app/uploads
     depends_on:
       db:
         condition: service_healthy

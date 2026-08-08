@@ -13,6 +13,9 @@
     <div class="page-body">
       <% projects.forEach(function(p, i) { %>
         <a class="card reveal delay-<%= Math.min(i, 9) %>" href="/projects/<%= p.slug %>">
+          <% if (p.image_filename) { %>
+            <img class="card-image" src="/uploads/<%= p.image_filename %>" alt="<%= p.title %> screenshot" loading="lazy">
+          <% } %>
           <div class="card-head">
             <h3><%= p.title %></h3>
             <span class="status"><span class="dot"></span>live</span>
