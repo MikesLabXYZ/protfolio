@@ -1,9 +1,40 @@
+const fs = require('fs');
 const { Pool } = require('pg');
 
 // PostgreSQL invalid_password code - what a rotated-out credential looks
 // like when Secrets Manager has issued a new one but this process is still
 // holding the old one.
 const INVALID_PASSWORD = '28P01';
+
+// RDS requires SSL and rejects plaintext connections outright (surfaces as
+// "no pg_hba.conf entry ... no encryption"). Once SSL is on, Node's default
+// trusted CA list doesn't include Amazon's RDS CA, so an unverified `ssl:
+// true`/PGSSLMODE=require connection fails differently
+// (SELF_SIGNED_CERT_IN_CHAIN) - and PGSSLMODE=no-verify "fixes" that by
+// disabling validation entirely, which isn't acceptable long-term.
+// DB_SSL_CA_PATH, when set, resolves both in one step: it turns SSL on
+// *and* points node-postgres at a CA bundle it can validate the RDS
+// certificate against (rejectUnauthorized: true). When unset, no `ssl` key
+// is added to the pg config at all - node-postgres's own env-var fallback
+// (PGSSLMODE, if some other process sets it) is untouched either way, and
+// a plain local Postgres with no TLS support (docker compose) keeps working
+// exactly as before.
+function buildSslOption() {
+  const caPath = process.env.DB_SSL_CA_PATH;
+  if (!caPath) return undefined;
+
+  let ca;
+  try {
+    ca = fs.readFileSync(caPath);
+  } catch (err) {
+    throw new Error(
+      `DB_SSL_CA_PATH is set to "${caPath}" but that file could not be read ` +
+      `(${err.code || err.message}). The Dockerfile writes the RDS global CA ` +
+      'bundle to /app/certs/rds-ca-bundle.pem - confirm the path matches that.'
+    );
+  }
+  return { rejectUnauthorized: true, ca };
+}
 
 let cachedCredentials = null;
 let secretsClient = null; // only ever constructed if DB_SECRET_ARN is set
@@ -45,12 +76,16 @@ async function getCredentials(forceRefresh) {
 }
 
 function makePool(host, creds) {
+  const ssl = buildSslOption();
   return new Pool({
     host,
     port: Number(process.env.DB_PORT || 5432),
     database: process.env.DB_NAME,
     user: creds.username,
     password: creds.password,
+    // Spread so the key is entirely absent (not even `ssl: undefined`) when
+    // DB_SSL_CA_PATH is unset - see buildSslOption() above.
+    ...(ssl ? { ssl } : {}),
   });
 }
 

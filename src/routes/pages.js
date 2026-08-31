@@ -3,6 +3,17 @@ const db = require('../db');
 
 const router = express.Router();
 
+// Behind a CDN, an unset Cache-Control means every request is forwarded to
+// the origin - nothing ever cached at the edge. Configurable so it can be
+// lowered during development (e.g. PAGE_CACHE_MAX_AGE=0) without a rebuild.
+const parsedMaxAge = Number(process.env.PAGE_CACHE_MAX_AGE);
+const PAGE_CACHE_MAX_AGE = Number.isFinite(parsedMaxAge) && parsedMaxAge >= 0 ? parsedMaxAge : 300;
+
+router.use((req, res, next) => {
+  res.set('Cache-Control', `public, max-age=${PAGE_CACHE_MAX_AGE}`);
+  next();
+});
+
 router.get('/', (req, res) => {
   res.render('index', { title: 'Home' });
 });

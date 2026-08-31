@@ -22,10 +22,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
-// Behind AWS ALB/CloudFront (or any single reverse proxy in front of this
-// app), req.ip and req.secure need this to read the real client IP /
-// protocol from X-Forwarded-* instead of the proxy's own.
-app.set('trust proxy', 1);
+// This app sits behind TWO chained proxies on the AWS target - CloudFront,
+// then the internal ALB - so req.ip needs to skip 2 hops of X-Forwarded-For
+// to land on the real client IP, not CloudFront's own IP. `trust proxy: 1`
+// would stop one hop too early and make every client look like it's
+// CloudFront, which quietly defeats the per-IP rate limiter below (every
+// request would share one bucket). Locally (docker compose, bare `node`),
+// there's no proxy in front of the app at all, so this number is simply
+// unused - Express only consults X-Forwarded-* once a request actually
+// arrives through that many trusted hops.
+app.set('trust proxy', 2);
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -58,16 +64,25 @@ app.use(baseUrlMiddleware);
 // requests (marquee logos, fonts, hero icons, JS/CSS), so counting those
 // against the same budget as page requests burns through it in a couple
 // of reloads. Real abuse protection belongs on the page routes.
-app.use('/static', express.static(path.join(__dirname, 'public')));
+//
+// maxAge/immutable produce `Cache-Control: public, max-age=31536000,
+// immutable` - safe because these assets are versioned by deploy, not by
+// filename, so a CDN in front of this origin can cache them indefinitely.
+app.use('/static', express.static(path.join(__dirname, 'public'), {
+  maxAge: '1y',
+  immutable: true,
+}));
 app.use('/uploads', express.static(uploads.uploadPath));
 
 // Used by the ALB target group / ECS task health check. Deliberately does
 // NOT touch the database - a DB blip must not cause every healthy task to
 // be killed and replaced at once. /healthz/deep below is the DB-aware
-// version, for manual use.
-app.get('/healthz', (req, res) => res.status(200).json({ status: 'ok' }));
+// version, for manual use. Both are no-store: a CDN or intermediary caching
+// a stale "ok" would defeat the entire point of a health check.
+app.get('/healthz', (req, res) => res.set('Cache-Control', 'no-store').status(200).json({ status: 'ok' }));
 
 app.get('/healthz/deep', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     await db.query('SELECT 1');
     res.status(200).json({ status: 'ok', db: 'ok' });
@@ -115,6 +130,37 @@ app.use((err, req, res, next) => {
 
 let server;
 
+// A misconfigured TLS_CERT_PATH/TLS_KEY_PATH used to surface as a raw
+// ENOENT stack trace with no indication of which variable was wrong - fine
+// on a terminal, useless in a log aggregator where the orchestrator only
+// ever reports "essential container exited". This logs exactly which
+// variable, which path it resolved to, and what's actually in that path's
+// parent directory, then exits deliberately (instead of letting an
+// unhandled exception produce an unrelated-looking crash).
+function readTlsFileOrExit(varName, filePath) {
+  try {
+    return fs.readFileSync(filePath);
+  } catch (err) {
+    const dir = path.dirname(filePath);
+    let dirListing;
+    try {
+      const entries = fs.readdirSync(dir);
+      dirListing = entries.length ? entries.join(', ') : '(empty)';
+    } catch (dirErr) {
+      dirListing = `(could not read "${dir}": ${dirErr.code || dirErr.message})`;
+    }
+    console.error(
+      `[startup] ${varName} is set to "${filePath}" but that file could not be read ` +
+      `(${err.code || err.message}).\n` +
+      `[startup] Parent directory "${dir}" actually contains: ${dirListing}\n` +
+      '[startup] The Dockerfile writes the self-signed LB-to-task cert to ' +
+      '/app/certs/tls.crt and /app/certs/tls.key - TLS_CERT_PATH/TLS_KEY_PATH ' +
+      'should normally point there exactly.'
+    );
+    process.exit(1);
+  }
+}
+
 function createServer() {
   const certPath = process.env.TLS_CERT_PATH;
   const keyPath = process.env.TLS_KEY_PATH;
@@ -126,8 +172,8 @@ function createServer() {
   // public TLS in front of this; this cert only covers the LB-to-task hop.
   if (certPath && keyPath) {
     const options = {
-      cert: fs.readFileSync(certPath),
-      key: fs.readFileSync(keyPath),
+      cert: readTlsFileOrExit('TLS_CERT_PATH', certPath),
+      key: readTlsFileOrExit('TLS_KEY_PATH', keyPath),
     };
     return https.createServer(options, app);
   }

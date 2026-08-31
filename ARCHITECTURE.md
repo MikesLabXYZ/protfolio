@@ -6,7 +6,7 @@
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Runtime | Node.js 20+ | No framework beyond Express |
+| Runtime | Node.js 22 LTS (Alpine) | No framework beyond Express. Alpine specifically (not a slim/distroless variant) - its bundled BusyBox `wget` is what the ECS task definition's own health check invokes directly, separately from the Dockerfile's `HEALTHCHECK` instruction |
 | Web framework | Express 4 | Server-rendered, no API/SPA split |
 | Templating | EJS | Server-rendered HTML, no client framework |
 | Database | PostgreSQL | Via `pg` driver, raw parameterized SQL, no ORM |
@@ -74,9 +74,38 @@ If a query fails with Postgres error `28P01` (`invalid_password` — the credent
 
 If `DB_HOST_RO` is set, a second pool is created against it and used for read-only routes (project list, project detail). Writes and migrations always use the primary pool (`DB_HOST`). If `DB_HOST_RO` is unset, both point at the primary — no separate connection pool is created, so there's no behavior difference locally.
 
+## RDS server certificate validation
+
+RDS requires SSL and rejects a plaintext connection outright. Two real deployment failures, in sequence, drove this design:
+
+1. **No SSL configured at all** →
+   ```
+   no pg_hba.conf entry for host "...", user "postgres", database "portfolio", no encryption
+   ```
+   RDS's `pg_hba.conf` has no rule that permits an unencrypted connection, full stop.
+
+2. **SSL turned on but unverified** (e.g. via an external `PGSSLMODE=require`, without supplying a CA) →
+   ```
+   Error: self-signed certificate in certificate chain
+   code: 'SELF_SIGNED_CERT_IN_CHAIN'
+   ```
+   Node's default trusted CA bundle doesn't include Amazon's RDS certificate authority, so any RSA cert RDS presents looks "self-signed" to it even though it's legitimately signed by Amazon's own CA. `PGSSLMODE=no-verify` "fixes" this by disabling certificate validation entirely — encrypted, but not authenticated, which is not an acceptable permanent state.
+
+**Neither error message names SSL configuration as its cause** — the first looks like a plain auth/network issue, the second looks like a cert-authority problem unrelated to how the connection was configured. `DB_SSL_CA_PATH` is the single setting that resolves both, in order: setting it turns SSL on (fixing error 1) **and** gives node-postgres a CA bundle to validate the server certificate against, `rejectUnauthorized: true` (fixing error 2, properly, instead of via `no-verify`).
+
+Implementation (`src/db.js`):
+
+- The Dockerfile downloads Amazon's public RDS global CA bundle (`https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`, ~200 KB, free, no runtime dependency) to `/app/certs/rds-ca-bundle.pem` at build time — the same pattern already used for the self-signed LB-to-task cert.
+- When `DB_SSL_CA_PATH` is set, `makePool()` builds `ssl: { rejectUnauthorized: true, ca: fs.readFileSync(process.env.DB_SSL_CA_PATH) }`.
+- When unset, no `ssl` key is added to the pg config **at all** (not even `ssl: undefined`) — this preserves node-postgres's own existing behavior of falling back to whatever `PGSSLMODE` happens to be set in the environment, so nothing changes for local docker-compose testing against a plain, non-TLS Postgres container.
+- `src/migrate.js` never builds its own `pg` connection — it only ever calls into `db.js`'s `init()`/`getPool()`, so migrations and the running app are structurally guaranteed to use identical connection configuration, including this SSL setting. They can't drift independently.
+- If the path is set but unreadable, the app throws a clear error naming `DB_SSL_CA_PATH`, the path, and the expected Dockerfile-written location — not a bare `ENOENT`.
+
 ## TLS inside the container
 
-If `TLS_CERT_PATH` and `TLS_KEY_PATH` are both set, `server.js` starts an `https` server; otherwise plain `http`. The Docker image bakes a self-signed certificate at build time (`openssl`, `CN=localhost`, 825 days) into `/app/certs/`, but does **not** set either environment variable as an image default — they're set only in the ECS task definition. The load balancer terminates the public-facing TLS certificate; this one only covers the LB-to-task hop and is never presented to a browser.
+If `TLS_CERT_PATH` and `TLS_KEY_PATH` are both set, `server.js` starts an `https` server; otherwise plain `http`. The Docker image bakes a self-signed certificate at build time (`openssl`, `CN=localhost`, 825 days) into `/app/certs/tls.crt` and `/app/certs/tls.key` — exactly the paths these two variables should point to — but does **not** set either environment variable as an image default — they're set only in the ECS task definition. The load balancer terminates the public-facing TLS certificate; this one only covers the LB-to-task hop and is never presented to a browser.
+
+If either variable is set but the file at that path can't be read, startup no longer produces a raw `ENOENT` stack trace (previously indistinguishable in a log aggregator from any other crash, with the orchestrator reporting nothing more than "essential container exited"). It logs, then exits deliberately: which environment variable, the exact path it resolved to, and a directory listing of that path's parent — e.g. `TLS_CERT_PATH` pointed at `/app/certs/server.crt` (a typo for `/app/certs/tls.crt`) now logs that the file wasn't found *and* that the parent directory actually contains `tls.crt, tls.key, rds-ca-bundle.pem`.
 
 ## Public base URL
 
@@ -95,10 +124,38 @@ If `TLS_CERT_PATH` and `TLS_KEY_PATH` are both set, `server.js` starts an `https
 
 At startup, if `UPLOAD_PATH` doesn't exist, it's created (`mkdir -p`-equivalent). If it exists but isn't writable, the app logs the exact path and effective uid and continues serving existing files read-only rather than crashing — uploads are rejected (503) until the underlying permissions issue is fixed. The app never calls `chown`/`chmod` on this directory at runtime: on AWS it's an EFS mount governed by an access point with a fixed POSIX uid/gid, and fighting that at runtime would simply fail.
 
+The container runs as the official `node:22-alpine` image's own built-in `node` user, `uid=1000, gid=1000` — not a custom user (creating one at uid 1000 fails outright, since the base image already defines it there) and not Alpine's auto-assigned default for a freshly created user either, which isn't guaranteed stable across a base image update. The EFS access point's "POSIX user" must be configured with this exact uid/gid, or writes fail silently from the access point's side.
+
 ## Health checks
 
 - **`/healthz`** — always returns 200 without touching the database. This is what the ALB target group / ECS task health check hits. A database blip must not cause every healthy task to be killed and replaced simultaneously.
 - **`/healthz/deep`** — actually queries the database (`SELECT 1`) and returns 503 if it's unreachable. For manual/diagnostic use, not for the load balancer.
+
+## Cache-Control headers
+
+The app previously sent no `Cache-Control` header on any response. Behind a CDN configured to respect origin cache headers, that means every single request is forwarded to the origin — nothing is ever cached at the edge. Headers now set:
+
+| Route(s) | Header | Why |
+|---|---|---|
+| `/static/*` | `public, max-age=31536000, immutable` | Safe to cache for a year: these assets are versioned by deploy, not by filename |
+| `/`, `/about`, `/experience`, `/projects`, `/projects/:slug`, `/contact` | `public, max-age=PAGE_CACHE_MAX_AGE` (default `300`) | Configurable via `PAGE_CACHE_MAX_AGE` so it can be lowered (e.g. to `0`) during development without a rebuild |
+| `/healthz`, `/healthz/deep` | `no-store` | A CDN or intermediary caching a stale "ok" would defeat the entire point of a health check |
+| `POST /admin/projects/:slug/image` | `no-store` | Dynamic, auth-gated, never cacheable |
+
+`/uploads/*` intentionally carries no explicit header (unchanged) — not in scope for this change.
+
+## Docker build command
+
+The documented build command is:
+
+```bash
+docker build --platform linux/amd64 --provenance=false --sbom=false -t lovely-portfolio:TAG .
+```
+
+(`npm run docker:build` runs the same command with a fixed local tag, for a quick local build.)
+
+- **`--platform linux/amd64`** — the container platform runs x86_64. Building on an ARM machine (e.g. Apple Silicon) without this flag produces an image that pulls successfully but fails at container start with `exec format error`.
+- **`--provenance=false --sbom=false`** — BuildKit attaches provenance and SBOM attestations by default, so a single `docker build` produces *three* entries in the registry per tag: the OCI image index, the actual image manifest, and a near-empty attestation manifest. Since the registry here uses immutable tags, those extra manifests accumulate and make the repository harder to read for no operational benefit in this deployment. Disabling both keeps one tag → one manifest.
 
 ## Graceful shutdown
 
@@ -111,7 +168,7 @@ Audited with OWASP ZAP (spider + active scan): 0 High / 0 Medium / 0 Low. Carrie
 - Full CSP via Helmet: `default-src 'self'`, `script-src 'self'`, `style-src 'self'` (no `unsafe-inline` anywhere), `object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`.
 - HSTS, `X-Content-Type-Options: nosniff`, hidden `X-Powered-By`, and Helmet's other standard defaults.
 - Rate limiting: 500 requests / 5 minutes per IP on page routes (matches AWS WAF's own published blanket-rule guidance for general website traffic), plus a separate, far tighter limit on the admin upload route.
-- `trust proxy` enabled for correct client IP/protocol behind the ALB/CloudFront.
+- `trust proxy` set to `2` — CloudFront *and* the internal ALB are both in front of the app, so `req.ip` has to skip two hops of `X-Forwarded-For` to reach the real client IP. Set to `1` (a single hop), every client would resolve to CloudFront's own IP, silently collapsing the per-IP rate limiter onto one shared bucket.
 - Global error handler: full error logged server-side, only a generic message ever reaches the client.
 - Parameterized SQL throughout, on both the primary and read pools.
 - Docker container runs as a non-root user; `.dockerignore` keeps `.env`/`node_modules`/`.git` out of any build context.
@@ -122,7 +179,7 @@ Audited with OWASP ZAP (spider + active scan): 0 High / 0 Medium / 0 Low. Carrie
 This branch runs as:
 
 - **Compute**: ECS Fargate tasks, behind an **internal** Application Load Balancer. The ALB is not itself internet-facing.
-- **Edge**: CloudFront sits in front of the internal ALB and is the actual public entry point for `mdlabs.website` — this is why `PUBLIC_BASE_URL` exists (the app never sees the public `Host` header directly) and why `trust proxy` matters (correct client IP from `X-Forwarded-*`).
+- **Edge**: CloudFront sits in front of the internal ALB and is the actual public entry point for `mdlabs.website` — this is why `PUBLIC_BASE_URL` exists (the app never sees the public `Host` header directly) and why `trust proxy` is `2`, not `1` — two proxy hops (CloudFront, then the ALB) sit between the client and the app.
 - **Database**: RDS PostgreSQL, with a read replica — the app's `DB_HOST_RO` support is what lets read-heavy page routes (project list/detail) offload onto it.
 - **Credentials**: AWS Secrets Manager, with automatic rotation. The app's retry-on-`28P01` logic is what makes rotation transparent — no task restart or redeploy required when a rotation happens.
 - **File storage**: EFS, mounted via an access point with a fixed POSIX uid/gid, for `UPLOAD_PATH` (project images uploaded via the admin route).
@@ -140,4 +197,8 @@ docker compose exec app npm run migrate
 curl http://localhost:8081/healthz
 ```
 
-Leave every AWS-specific variable unset for this: `DB_SECRET_ARN`, `DB_HOST_RO`, `TLS_CERT_PATH`, `TLS_KEY_PATH`, `PUBLIC_BASE_URL`, `ADMIN_UPLOAD_TOKEN`. With all of those unset, the app uses plain env-var DB credentials, a single pool, plain HTTP, a request-derived origin, and doesn't register the admin upload route at all — no AWS SDK call is ever attempted, and `docker compose up` behaves exactly as it did before this branch existed.
+Leave every AWS-specific variable unset for this: `DB_SECRET_ARN`, `DB_HOST_RO`, `DB_SSL_CA_PATH`, `TLS_CERT_PATH`, `TLS_KEY_PATH`, `PUBLIC_BASE_URL`, `ADMIN_UPLOAD_TOKEN`. With all of those unset, the app uses plain env-var DB credentials, a single pool with no `ssl` config at all, plain HTTP, a request-derived origin, and doesn't register the admin upload route at all — no AWS SDK call is ever attempted, and `docker compose up` behaves exactly as it did before this branch existed. `PAGE_CACHE_MAX_AGE` isn't AWS-specific and defaults to `300` either way.
+
+## Node.js version
+
+The base image is `node:22-alpine` (bumped from 20). Reason: the AWS SDK for JavaScript v3 (used for Secrets Manager) emits a startup warning that versions published after the first week of January 2027 will require Node 22+ — noisy in every log stream and worth getting ahead of. There is no `test` script or test suite in this repo to run as part of that change; verification instead relies on the same docker-compose smoke test documented above (build, migrate, `/healthz`) plus confirming `npm install --omit=dev` completes cleanly under Node 22 during the image build. No dependency in `package.json` was found to be incompatible with Node 22.

@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "migrate": "node src/migrate.js"
+    "migrate": "node src/migrate.js",
+    "docker:build": "docker build --platform linux/amd64 --provenance=false --sbom=false -t lovely-portfolio:local ."
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1106.0",

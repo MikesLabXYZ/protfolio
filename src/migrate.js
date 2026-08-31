@@ -1,6 +1,11 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+// Deliberately goes through db.js's own init()/getPool() rather than
+// building a second `pg` Pool here - migrate.js has no `require('pg')` of
+// its own. That's what guarantees migrations always connect with the exact
+// same host/credentials/SSL configuration (including DB_SSL_CA_PATH) as the
+// running app, instead of the two drifting independently.
 const db = require('./db');
 
 async function main() {

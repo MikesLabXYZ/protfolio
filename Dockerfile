@@ -1,4 +1,4 @@
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
@@ -15,9 +15,24 @@ RUN apk add --no-cache openssl && \
       -keyout /certs/tls.key -out /certs/tls.crt \
       -subj "/CN=localhost"
 
-FROM node:20-alpine
+# Amazon RDS's public global CA bundle, so the app can validate the RDS
+# server certificate (DB_SSL_CA_PATH) instead of connecting with
+# rejectUnauthorized: false. Free, public, ~200 KB, no runtime dependency -
+# it's a static file copied into the final image below, same as the
+# self-signed cert above. wget here is a build-time-only tool (this stage
+# is never copied into the runtime image as a whole, only /certs is).
+RUN apk add --no-cache wget && \
+    wget -q -O /certs/rds-ca-bundle.pem \
+      https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+FROM node:22-alpine
 WORKDIR /app
-RUN addgroup -S app && adduser -S app -G app
+# Runs as the official image's own preexisting `node` user (uid=1000,
+# gid=1000) rather than a custom one - creating a new user at uid 1000 fails
+# outright ("addgroup: gid '1000' in use") because the base image already
+# defines it. That uid is also not incidental here: it's the exact POSIX
+# user/group the EFS access point mounting UPLOAD_PATH on AWS is configured
+# with, and it must match this exact number or writes silently start failing.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /certs ./certs
 COPY package.json ./
@@ -26,13 +41,14 @@ COPY migrations ./migrations
 
 ENV NODE_ENV=production
 ENV UPLOAD_PATH=/app/uploads
-# Deliberately NOT setting TLS_CERT_PATH / TLS_KEY_PATH here even though the
-# cert files exist at /app/certs - those two variables are set only in the
-# ECS task definition. Without them, the app starts over plain HTTP, which
-# is what `docker compose up` and local/no-AWS testing need.
-RUN mkdir -p /app/uploads && chown -R app:app /app
+# Deliberately NOT setting TLS_CERT_PATH / TLS_KEY_PATH / DB_SSL_CA_PATH here
+# even though /app/certs/tls.crt, tls.key, and rds-ca-bundle.pem all exist -
+# all three are set only in the ECS task definition. Without them, the app
+# starts over plain HTTP and connects to Postgres with no SSL config at all,
+# which is what `docker compose up` and local/no-AWS testing need.
+RUN mkdir -p /app/uploads && chown -R node:node /app
 
-USER app
+USER node
 EXPOSE 3000
 
 # Protocol-aware: when TLS_CERT_PATH is set (HTTPS mode, see src/server.js),

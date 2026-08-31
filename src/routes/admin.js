@@ -18,6 +18,12 @@ if (!process.env.ADMIN_UPLOAD_TOKEN) {
 } else {
   const router = express.Router();
 
+  // Every admin response is dynamic and auth-gated - never cacheable.
+  router.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+
   const ALLOWED_TYPES = {
     'image/jpeg': '.jpg',
     'image/png': '.png',
