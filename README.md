@@ -21,6 +21,19 @@ docker compose exec app npm run migrate
 
 Visit http://localhost:3000.
 
+## Configuration
+
+`PAGE_CACHE_MAX_AGE` (optional) - Cache-Control `max-age` in seconds on the
+page routes (`/`, `/about`, `/experience`, `/projects`, `/projects/:slug`,
+`/contact`). Unset by default, and unset means no Cache-Control header is
+sent on those routes at all - see `.env.example` for why (in short: behind
+CloudFront, that lets a CloudFront invalidation alone make a change appear,
+instead of a cached header sitting in the viewer's own browser out of
+CloudFront's reach). Set it to a positive number of seconds only if this app,
+rather than CloudFront, should control the page cache lifetime. `/static/*`
+is always cached for a year; `/healthz`, `/healthz/deep`, and the admin route
+are always `no-store`, regardless of this setting.
+
 ## Structure
 
 ```

@@ -3,14 +3,43 @@ const db = require('../db');
 
 const router = express.Router();
 
-// Behind a CDN, an unset Cache-Control means every request is forwarded to
-// the origin - nothing ever cached at the edge. Configurable so it can be
-// lowered during development (e.g. PAGE_CACHE_MAX_AGE=0) without a rebuild.
-const parsedMaxAge = Number(process.env.PAGE_CACHE_MAX_AGE);
-const PAGE_CACHE_MAX_AGE = Number.isFinite(parsedMaxAge) && parsedMaxAge >= 0 ? parsedMaxAge : 300;
+// Unset by default, deliberately - not a fallback to some old default. Behind
+// CloudFront's CachingOptimized policy, an origin Cache-Control header is
+// honoured at the edge AND forwarded straight to the viewer's browser, where
+// a CloudFront invalidation can never reach it. With no header at all,
+// CloudFront applies its own policy default at the edge and sends nothing to
+// the viewer, so an invalidation is instantly reflected - the whole point of
+// letting CloudFront, not this app, own page cache lifetime. Setting
+// PAGE_CACHE_MAX_AGE is an optional, advanced knob for a reader who wants
+// app-level control instead; see PAGE_CACHE_MAX_AGE in .env.example.
+function parsePageCacheMaxAge() {
+  const raw = process.env.PAGE_CACHE_MAX_AGE;
+  if (raw === undefined || raw === '' || raw === '0' || raw === 'off') {
+    return null; // no Cache-Control header on page routes at all
+  }
+  const parsed = Number(raw);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+  // Fail fast and by name, the same way DB_SSL_CA_PATH does in src/db.js for
+  // an unreadable CA bundle - a silently-ignored bad value here would mean
+  // the app quietly serves cacheable pages with no Cache-Control header at
+  // all, indistinguishable from the deliberate "unset" case above.
+  throw new Error(
+    `PAGE_CACHE_MAX_AGE is set to "${raw}", which isn't a valid value. Leave ` +
+    'it unset (or set it to "0" or "off") to send no Cache-Control header on ' +
+    "page routes and let CloudFront's own cache policy own the page lifetime, " +
+    'or set it to a positive whole number of seconds to send ' +
+    '"Cache-Control: public, max-age=<n>" instead.'
+  );
+}
+
+const PAGE_CACHE_MAX_AGE = parsePageCacheMaxAge();
 
 router.use((req, res, next) => {
-  res.set('Cache-Control', `public, max-age=${PAGE_CACHE_MAX_AGE}`);
+  if (PAGE_CACHE_MAX_AGE !== null) {
+    res.set('Cache-Control', `public, max-age=${PAGE_CACHE_MAX_AGE}`);
+  }
   next();
 });
 

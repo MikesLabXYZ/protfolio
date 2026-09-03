@@ -133,12 +133,12 @@ The container runs as the official `node:22-alpine` image's own built-in `node` 
 
 ## Cache-Control headers
 
-The app previously sent no `Cache-Control` header on any response. Behind a CDN configured to respect origin cache headers, that means every single request is forwarded to the origin — nothing is ever cached at the edge. Headers now set:
+Headers set:
 
 | Route(s) | Header | Why |
 |---|---|---|
 | `/static/*` | `public, max-age=31536000, immutable` | Safe to cache for a year: these assets are versioned by deploy, not by filename |
-| `/`, `/about`, `/experience`, `/projects`, `/projects/:slug`, `/contact` | `public, max-age=PAGE_CACHE_MAX_AGE` (default `300`) | Configurable via `PAGE_CACHE_MAX_AGE` so it can be lowered (e.g. to `0`) during development without a rebuild |
+| `/`, `/about`, `/experience`, `/projects`, `/projects/:slug`, `/contact` | none, by default | Behind CloudFront's `CachingOptimized` policy, an origin `Cache-Control` header is honoured at the edge **and** forwarded to the viewer's browser, where a CloudFront invalidation can't reach it. With no header, CloudFront applies its own policy default at the edge and sends nothing to the viewer, so an invalidation alone is enough. `PAGE_CACHE_MAX_AGE` (optional, advanced) overrides this with `public, max-age=<n>` for a reader who wants app-level control instead — any other value (unset, empty, `0`, `off` = no header either way; anything non-numeric or non-positive) fails fast at startup with a named error rather than being silently ignored |
 | `/healthz`, `/healthz/deep` | `no-store` | A CDN or intermediary caching a stale "ok" would defeat the entire point of a health check |
 | `POST /admin/projects/:slug/image` | `no-store` | Dynamic, auth-gated, never cacheable |
 
@@ -197,8 +197,8 @@ docker compose exec app npm run migrate
 curl http://localhost:8081/healthz
 ```
 
-Leave every AWS-specific variable unset for this: `DB_SECRET_ARN`, `DB_HOST_RO`, `DB_SSL_CA_PATH`, `TLS_CERT_PATH`, `TLS_KEY_PATH`, `PUBLIC_BASE_URL`, `ADMIN_UPLOAD_TOKEN`. With all of those unset, the app uses plain env-var DB credentials, a single pool with no `ssl` config at all, plain HTTP, a request-derived origin, and doesn't register the admin upload route at all — no AWS SDK call is ever attempted, and `docker compose up` behaves exactly as it did before this branch existed. `PAGE_CACHE_MAX_AGE` isn't AWS-specific and defaults to `300` either way.
+Leave every AWS-specific variable unset for this: `DB_SECRET_ARN`, `DB_HOST_RO`, `DB_SSL_CA_PATH`, `TLS_CERT_PATH`, `TLS_KEY_PATH`, `PUBLIC_BASE_URL`, `ADMIN_UPLOAD_TOKEN`. With all of those unset, the app uses plain env-var DB credentials, a single pool with no `ssl` config at all, plain HTTP, a request-derived origin, and doesn't register the admin upload route at all — no AWS SDK call is ever attempted, and `docker compose up` behaves exactly as it did before this branch existed. `PAGE_CACHE_MAX_AGE` isn't AWS-specific and is left unset either way, which is also its default — see [Cache-Control headers](#cache-control-headers).
 
 ## Node.js version
 
-The base image is `node:22-alpine` (bumped from 20). Reason: the AWS SDK for JavaScript v3 (used for Secrets Manager) emits a startup warning that versions published after the first week of January 2027 will require Node 22+ — noisy in every log stream and worth getting ahead of. There is no `test` script or test suite in this repo to run as part of that change; verification instead relies on the same docker-compose smoke test documented above (build, migrate, `/healthz`) plus confirming `npm install --omit=dev` completes cleanly under Node 22 during the image build. No dependency in `package.json` was found to be incompatible with Node 22.
+The base image is `node:22-alpine` (bumped from 20). Reason: the AWS SDK for JavaScript v3 (used for Secrets Manager) emits a startup warning that versions published after the first week of January 2027 will require Node 22+ — noisy in every log stream and worth getting ahead of. At the time of that bump there was no `test` script or test suite in this repo to run as part of it; verification instead relied on the same docker-compose smoke test documented above (build, migrate, `/healthz`) plus confirming `npm install --omit=dev` completes cleanly under Node 22 during the image build. No dependency in `package.json` was found to be incompatible with Node 22. `npm test` (`node --test`, no dependency added — Node 22+'s own built-in test runner) now also exists, covering the page-cache behaviour below; it isn't part of the image build, just a local/CI check.
