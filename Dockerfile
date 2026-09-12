@@ -4,6 +4,18 @@ COPY package.json ./
 RUN npm install --omit=dev
 
 FROM node:20-alpine
+
+# Upgrade the OS packages before anything else.
+#
+# The base image pins whatever alpine shipped on the day it was built, so the
+# nightly re-pull cannot make it newer than upstream published it. Every HIGH
+# finding this image has ever reported has been openssl in that base, with a fix
+# already sitting in alpine's repository: libcrypto3 and libssl3 at 3.5.6-r0
+# against 3.5.8-r0 available. One line clears them, and keeps clearing them.
+#
+# --no-cache leaves no package index behind in the layer.
+RUN apk --no-cache upgrade
+
 WORKDIR /app
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=deps /app/node_modules ./node_modules
