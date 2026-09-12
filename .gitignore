@@ -3,3 +3,5 @@ node_modules/
 *.log
 src/public/uploads/*
 !src/public/uploads/.gitkeep
+.tunnel.env
+.cfanalytics.env
