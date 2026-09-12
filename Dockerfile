@@ -15,6 +15,24 @@ ENV NODE_ENV=production
 ENV UPLOAD_DIR=/app/uploads
 RUN mkdir -p /app/uploads && chown -R app:app /app
 
+# Remove the package manager from the runtime image.
+#
+# Nothing here needs it: dependencies are installed in the deps stage above and
+# copied in, the healthcheck runs node, and so does the entrypoint. What it does
+# do is carry its own bundled dependencies into production, and one of them,
+# node-tar 6.2.1, is the only CRITICAL this image reports (CVE-2026-59873, a
+# gzip-bomb denial of service). The application never touches it.
+#
+# It is also simply good hygiene. A package manager in a production image is the
+# first thing anyone who gets code execution would reach for.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm \
+           /usr/local/bin/npx
+
+# The nightly npm audit used to run inside this image and cannot any more. It now
+# copies node_modules out and audits it in a throwaway node container, which
+# still describes exactly what shipped. See maintenance.sh step 3.
+
 USER app
 EXPOSE 3000
 
