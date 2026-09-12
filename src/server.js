@@ -11,9 +11,31 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
-// Behind AWS ALB/CloudFront, req.ip and req.secure need this to read the
-// real client IP / protocol from X-Forwarded-* instead of the LB itself.
-app.set('trust proxy', 1);
+// How many proxy hops to trust when working out req.ip. Getting this wrong is
+// silent: the rate limiter below still appears to work, it just stops limiting
+// the right thing.
+//
+// On the Oracle deployment the chain is Cloudflare -> Caddy -> this app, and
+// the app receives:
+//
+//   X-Forwarded-For: <visitor>, <cloudflare edge>      (Caddy appends its peer)
+//   socket peer:     <caddy>
+//
+// Express counts hops from the app backwards, so 1 trusts only Caddy and makes
+// req.ip the RIGHTMOST entry, which is Cloudflare's edge address, not the
+// visitor. Every visitor arriving through the same edge then shares one
+// rate-limit bucket, and anyone landing on a different edge gets a fresh one.
+// Measured on the live site before this was changed: two consecutive requests
+// from one browser returned remaining counts of 496 then 499, because they hit
+// different edges.
+//
+// 2 trusts Caddy and the Cloudflare edge, so req.ip is the visitor. It is also
+// the safe ceiling: Cloudflare appends the true client to any X-Forwarded-For a
+// visitor sends, so a spoofed value lands further left and is ignored at 2. A
+// higher number would start trusting attacker-supplied input.
+//
+// AWS happens to need 2 as well, for CloudFront then the ALB.
+app.set('trust proxy', 2);
 
 app.use(helmet({
   contentSecurityPolicy: {
