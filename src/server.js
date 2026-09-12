@@ -104,6 +104,52 @@ app.use((err, req, res, next) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+// Shut down when asked, rather than being killed.
+//
+// Docker sends SIGTERM on every stop and every recreate. Until this existed the
+// process had no handler, so nothing happened: docker waited out its full ten
+// second grace period and then SIGKILLed, which meant every deployment reported
+// `die exit=137`, took ten seconds longer than it needed to, and cut off
+// whatever requests were in flight rather than finishing them.
+//
+// Found on 2026-09-12 in the container event log, not by guessing. The exit code
+// had been read as evidence of something else entirely.
+const shutdown = (signal) => {
+  console.log(`${signal} received, shutting down`);
+
+  // Stop accepting new connections and let in-flight responses finish.
+  server.close((err) => {
+    if (err) console.error('error closing the server', err);
+    // Require it here rather than at the top: this file does not otherwise use
+    // the pool, and require() returns the same instance the routes hold.
+    require('./db').end()
+      .catch((poolErr) => console.error('error closing the database pool', poolErr))
+      .then(() => {
+        console.log('shutdown complete');
+        process.exit(0);
+      });
+  });
+
+  // server.close() waits for every open connection to end, and the reverse
+  // proxy in front of this app holds keep-alive connections open by design, so
+  // without this the callback above might never run. Drops the connections that
+  // are sitting idle; anything mid-response is left alone to finish.
+  if (typeof server.closeIdleConnections === 'function') {
+    server.closeIdleConnections();
+  }
+
+  // Backstop, well inside docker's ten second grace period. A process that
+  // refuses to exit is the exact failure this handler was written to remove, so
+  // it must not be able to reintroduce it.
+  setTimeout(() => {
+    console.error('shutdown timed out, exiting anyway');
+    process.exit(1);
+  }, 8000).unref();
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
