@@ -14,7 +14,7 @@
       <% projects.forEach(function(p, i) { %>
         <a class="card reveal delay-<%= Math.min(i, 9) %>" href="/projects/<%= p.slug %>">
           <div class="card-head">
-            <h3><%= p.title %></h3>
+            <h2><%= p.title %></h2>
             <span class="status"><span class="dot"></span>live</span>
           </div>
           <p><%= p.summary %></p>

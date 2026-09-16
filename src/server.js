@@ -6,6 +6,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
 const pagesRouter = require('./routes/pages');
+const seo = require('./seo');
+const pool = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +74,40 @@ app.use('/uploads', express.static(process.env.UPLOAD_DIR || path.join(__dirname
 // Used by the ALB target group / Route 53 health check.
 app.get('/healthz', (req, res) => res.status(200).json({ status: 'ok' }));
 
+// What crawlers ask for by fixed path. Cheap, so they sit with the static
+// files rather than under the page rate limit; a crawler that hits the limit
+// on robots.txt stops indexing. The favicon is here because browsers ask for
+// /favicon.ico whatever the page declares, and every visit was a 404 in the
+// access log until 2026-09-16.
+const ICON_DIR = path.join(__dirname, 'public', 'icons');
+app.get('/favicon.ico', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(ICON_DIR, 'favicon.ico'));
+});
+app.get('/robots.txt', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('text/plain').send(seo.robotsTxt());
+});
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT slug, created_at FROM projects WHERE is_draft = FALSE ORDER BY sort_order ASC'
+    );
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.type('application/xml').send(seo.sitemapXml(rows));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Title, description, canonical, preview tags for the page being rendered.
+// The default is per path; a route that knows better (a project page, the
+// 404) replaces res.locals.seo before rendering.
+app.use((req, res, next) => {
+  res.locals.seo = seo.forRequest(req.path);
+  next();
+});
+
 // AWS's own WAF guidance is the reference here (this app deploys behind
 // an ALB): a blanket rate-based rule of 500 requests / 5 min per IP for
 // general traffic, with tighter limits reserved for specific sensitive
@@ -88,7 +124,7 @@ app.use(rateLimit({
 app.use('/', pagesRouter);
 
 app.use((req, res) => {
-  res.status(404).render('404', { title: 'Not found' });
+  res.status(404).render('404', { title: 'Not found', seo: seo.forNotFound(req.path) });
 });
 
 // Final error handler - never leak stack traces or query details to the

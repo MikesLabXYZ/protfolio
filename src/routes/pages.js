@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const seo = require('../seo');
 
 const router = express.Router();
 
@@ -33,9 +34,13 @@ router.get('/projects/:slug', async (req, res, next) => {
       [req.params.slug]
     );
     if (rows.length === 0) {
-      return res.status(404).render('404', { title: 'Not found' });
+      return res.status(404).render('404', { title: 'Not found', seo: seo.forNotFound(req.path) });
     }
-    res.render('project-detail', { title: rows[0].title, project: rows[0] });
+    res.render('project-detail', {
+      title: rows[0].title,
+      project: rows[0],
+      seo: seo.forProject(req.path, rows[0]),
+    });
   } catch (err) {
     next(err);
   }
